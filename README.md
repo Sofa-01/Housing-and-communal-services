@@ -89,7 +89,7 @@
 
 ### Схема данных
 
-<img width="974" height="862" alt="image" src="https://github.com/user-attachments/assets/a64ca33b-9ae3-4ed9-bb6c-9a9ebe89d568" />
+<img width="2109" height="1900" alt="jkh pgerd3" src="https://github.com/user-attachments/assets/64e2d6ec-33ba-478d-b881-041410b5ef4a" />
 
 
 ## **Функциональные возможности**
