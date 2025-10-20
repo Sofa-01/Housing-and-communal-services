@@ -164,6 +164,22 @@ User-flow диаграмма отражает процесс работы инс
 
 Проведение осмотра. Пользователь заполняет пункты чек-листа. Если выявлены дефекты, он добавляет описание и фотографии. В случае отсутствия дефектов отмечает пункт как «без замечаний». После заполнения всех пунктов формируется акт осмотра, который затем проверяется на корректность. При выявлении ошибок данные редактируются и акт проверяется повторно. После подтверждения правильности всех данных акт отправляется специалисту по координации для окончательного подтверждения.
 
+### Примеры экранов UI
+
+<img width="876" height="407" alt="image" src="https://github.com/user-attachments/assets/20a3f656-9ee9-4505-8264-403a8ec5ec5e" />
+
+<img width="951" height="437" alt="image" src="https://github.com/user-attachments/assets/f0d4b25a-9645-4910-ba9d-7b9779932381" />
+
+<img width="975" height="451" alt="image" src="https://github.com/user-attachments/assets/76049b43-9309-45a3-a768-95c7d75d193b" />
+
+<img width="975" height="447" alt="image" src="https://github.com/user-attachments/assets/aeb7be37-1239-4fbd-9288-accb83d6faad" />
+
+<img width="975" height="441" alt="image" src="https://github.com/user-attachments/assets/8f1656ac-c4a0-4cf4-b22a-c46a93f95c8a" />
+
+<img width="975" height="447" alt="image" src="https://github.com/user-attachments/assets/3b314c4a-46cf-4891-a1dc-fc99e0c76efb" />
+
+<img width="975" height="418" alt="image" src="https://github.com/user-attachments/assets/bed2caaa-2a07-453b-a99a-cf41761e4ca9" />
+
 ---
 
 ## **Детали реализации**
