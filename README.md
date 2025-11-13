@@ -104,7 +104,8 @@
 
 Диаграмма развертывания
 
-<img width="609" height="673" alt="image" src="https://github.com/user-attachments/assets/890a7128-00c8-4ffc-986f-a925e2a7019c" />
+<img width="2728" height="3208" alt="image" src="https://github.com/user-attachments/assets/2f05994d-c3a9-4263-886d-9802a404143d" />
+
 
 ## **Функциональные возможности**
 
