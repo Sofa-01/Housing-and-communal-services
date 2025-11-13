@@ -90,6 +90,21 @@
 
 <img width="2109" height="1900" alt="jkh pgerd3" src="https://github.com/user-attachments/assets/64e2d6ec-33ba-478d-b881-041410b5ef4a" />
 
+Диаграмма вариантов использования
+
+<img width="665" height="584" alt="image" src="https://github.com/user-attachments/assets/52af595f-df01-4316-ac06-fa9ab5a06d8b" />
+
+Диаграмма состояний
+
+<img width="604" height="736" alt="image" src="https://github.com/user-attachments/assets/6a4b457f-0dac-4b02-b7d2-f282cbc5f530" />
+
+Диаграмма деятельности
+
+<img width="720" height="917" alt="image" src="https://github.com/user-attachments/assets/2433cfde-d233-4ba1-9d8a-6a92f0a32ecb" />
+
+Диаграмма развертывания
+
+<img width="609" height="673" alt="image" src="https://github.com/user-attachments/assets/890a7128-00c8-4ffc-986f-a925e2a7019c" />
 
 ## **Функциональные возможности**
 
