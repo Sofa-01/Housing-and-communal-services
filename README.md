@@ -208,7 +208,137 @@ User-flow диаграмма отражает процесс работы инс
 
 ### Безопасность
 
-Описать подходы, использованные для обеспечения безопасности, включая описание процессов аутентификации и авторизации с примерами кода из репозитория сервера
+В проекте, реализованном на языке Go с использованием фреймворка Gin, за механизм аутентификации отвечают следующие компоненты: UserService, AuthHandler, JwtProvider, bcrypt и модуль auth. 
+
+Класс UserService выполняет поиск пользователя в базе данных по логину и проверку введённого пароля с помощью библиотеки golang.org/x/crypto/bcrypt. При создании нового пользователя пароль преобразуется в зашифрованный хэш с использованием алгоритма BCrypt, что обеспечивает защиту данных. Контроллер AuthHandler принимает запросы на вход в систему по адресу /api/v1/auth/login, вызывает сервисный слой для проверки данных и возвращает пользователю пару токенов. Компонент JwtProvider отвечает за генерацию и подпись токенов, включая в них данные пользователя (UserID, RoleID, срок действия). Подпись осуществляется с использованием алгоритма HMAC-SHA256, что гарантирует целостность и подлинность токена.
+
+Механизм аутентификации реализован по принципу stateless – сервер не хранит пользовательские сессии, а использует проверку токена при каждом запросе. Access-токен имеет короткий срок жизни (15 минут), а Refresh-токен – длительный (до 30 дней). Refresh-токен хранится на клиенте и используется для получения нового access-токена при истечении срока действия предыдущего, что обеспечивает удобство для пользователя без повторной аутентификации.
+
+Пример реализации контроллера аутентификации:
+
+	func (h *AuthHandler) Login(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+	return
+	}
+
+	user, err := h.userService.Authenticate(req.Email, req.Password)
+	if err != nil {
+	c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+	return
+	}
+
+	access, refresh, err := h.jwtProvider.GenerateTokens(user.ID, user.RoleID)
+	if err != nil {
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+	return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+	"access_token": access,
+	"refresh_token": refresh,
+	"expires_in": 900, 
+	})
+	}
+
+Проверка пароля реализуется в UserService:
+
+	func (s *UserService) Authenticate(email, password string) (*models.User, error) {
+	user, err := s.repo.FindByEmail(email)
+	if err != nil {
+	return nil, fmt.Errorf("user not found: %w", err)
+	}
+	
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	return nil, fmt.Errorf("invalid password: %w", err)
+	}
+	
+	return user, nil
+	}
+
+Авторизация – процесс проверки прав доступа пользователя (его роли) для выполнения конкретных действий в системе. В данном проекте авторизация реализована с использованием механизма RBAC (Role-Based Access Control). 
+За реализацию авторизации отвечают следующие компоненты: AuthMiddleware, RBACMiddleware, JwtProvider, а также модуль маршрутизации router.go. 
+Middleware AuthRequired выполняет валидацию JWT-токена, проверяет его срок действия и извлекает информацию о пользователе и его роли из claims. После этого срабатывает RBACMiddleware, который сравнивает роль пользователя с требуемым уровнем доступа для конкретного маршрута. Если уровень роли пользователя не соответствует требованиям маршрута, сервер возвращает ответ с кодом 403 (Forbidden).
+
+Пример реализации middleware проверки токена:
+
+	func AuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+	return}
+	claims, err := jwtProvider.ParseToken(strings.TrimPrefix(tokenString, "Bearer "))
+	if err != nil {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+	return
+	}
+	
+	c.Set("user_id", claims.UserID)
+	c.Set("role_id", claims.RoleID)
+	c.Next()
+	}
+	}
+
+Пример RBAC middleware:
+
+	func RBACMiddleware(requiredRoleID int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+	roleID := c.GetInt("role_id")
+	if roleID > requiredRoleID {
+	log.Printf("Access denied: user with role %d tried to access %s", roleID, c.Request.URL.Path)
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied"})
+	return
+	}
+	c.Next()
+	}
+	}
+
+Использование механизма RBAC обеспечивает гибкое разграничение прав доступа: специалисты по сопровождению имеют полный доступ к административным функциям, координаторы ‒ к управлению задачами и проверками, а инспекторы ‒ только к разделу инспекций. Благодаря внедрению этой модели достигается безопасность данных и предсказуемость поведения системы при обращении пользователей с различными ролями.
+В архитектуре системы также предусмотрены механизмы защиты данных, включающие шифрование паролей с помощью BCrypt, валидацию токенов, хранение секретных ключей в переменных окружения (JWT_SECRET), использование HTTPS и ограничение доступа на уровне маршрутов. Эти меры в совокупности обеспечивают высокий уровень безопасности и соответствие современным требованиям к защите информации.
+
+Пароли пользователей преобразуются в хеш с использованием алгоритма BCrypt, что обеспечивает их безопасное хранение. Пример реализации механизма шифрования паролей при регистрации пользователя:
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+	return fmt.Errorf("failed to hash password: %w", err)
+	}
+	user.PasswordHash = string(hashedPassword)
+
+Для проверки подлинности токена используется секретный ключ (JWT_SECRET), хранящийся в переменных окружения. Сервер проверяет подпись и срок действия токена перед предоставлением доступа к ресурсам.
+
+Пример проверки подлинности токена JWT представлен ниже:
+
+	func ParseToken(tokenStr string) (*UserClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+	return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if claims, ok := token.Claims.(*UserClaims); ok && token.Valid {
+	return claims, nil
+	}
+	return nil, err
+	}
+
+Секретные ключи для подписи JWT хранятся в переменных окружения, что предотвращает их утечку через исходный код. Ниже представлено использование переменных окружения для хранения секретных ключей:
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+	log.Fatal("JWT_SECRET is not set in environment variables")
+	}
+
+Ограничение доступа реализовано через middleware, который сверяет роль пользователя с требуемой для маршрута. Ограничение доступа по ролям в middleware представлено ниже:
+
+	func RBACMiddleware(requiredRole int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+	userRole := c.GetInt("role_id")
+	if userRole > requiredRole {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+	return
+	}
+	c.Next()
+	}
+	}
 
 ### Оценка качества кода
 
@@ -288,7 +418,8 @@ User-flow диаграмма отражает процесс работы инс
 Параметр dsn указывает путь к базе данных jkh_inspection, расположенной на локальном сервере PostgreSQL по порту 5432. Подключение осуществляется под указанным пользователем с заданным паролем.
 Метод client.Schema.Create() обеспечивает автоматическое создание и обновление структуры базы данных при запуске приложения, что упрощает процесс развертывания.
 Используемый ORM Ent обеспечивает типобезопасность, генерирует корректные структуры таблиц и связи, а также проверяет все ограничения на этапе компиляции, повышая надежность работы приложения.
-Запуск программного приложения. Запуск программного приложения представляет собой завершающий этап разработки, при котором проверенное и готовое к использованию программное обеспечение приводится в рабочее состояние. На этом этапе осуществляется конфигурация окружения, подключение к базе данных, создание таблиц и добавление системных ролей.
+
+Запуск программного приложения представляет собой завершающий этап разработки, при котором проверенное и готовое к использованию программное обеспечение приводится в рабочее состояние. На этом этапе осуществляется конфигурация окружения, подключение к базе данных, создание таблиц и добавление системных ролей.
 
 Для запуска программного приложения необходимо выполнить следующие шаги:
 
