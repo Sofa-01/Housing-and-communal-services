@@ -369,11 +369,258 @@ Middleware AuthRequired выполняет валидацию JWT-токена, 
 
 ### Unit-тесты
 
-Представить код тестов для пяти методов и его пояснение
+TestChecklistService_CreateChecklist_Success проверяет успешное создание нового чеклиста через сервис. Тест убеждается, что метод CreateChecklist корректно сохраняет данные в базе и возвращает объект с правильными значениями полей Title и InspectionType. Это подтверждает, что базовая функциональность создания чеклиста работает корректно.
+
+	func TestChecklistService_CreateChecklist_Success(t *testing.T) {
+	    client := testutil.SetupTestDB(t)
+	    defer client.Close()
+	
+	    svc := NewChecklistService(client)
+	    ctx := context.Background()
+	
+	    desc := "Описание чеклиста"
+	    req := models.CreateChecklistRequest{
+	        Title:          "Типовой чеклист",
+	        InspectionType: "spring",
+	        Description:    &desc,
+	    }
+	
+	    resp, err := svc.CreateChecklist(ctx, req)
+	    if err != nil {
+	        t.Fatalf("CreateChecklist failed: %v", err)
+	    }
+	
+	    if resp.Title != req.Title {
+	        t.Errorf("Expected title %s, got %s", req.Title, resp.Title)
+	    }
+	    if resp.InspectionType != req.InspectionType {
+	        t.Errorf("Expected inspection_type %s, got %s", req.InspectionType, resp.InspectionType)
+	    }
+	}
+
+TestChecklistService_CreateChecklist_Duplicate проверяет обработку попытки создать дубликат чеклиста. Если чеклист с таким же названием и типом проверки уже существует, сервис должен вернуть ошибку ErrChecklistConflict. Тест подтверждает, что система корректно предотвращает дублирование данных.
+	
+	func TestChecklistService_CreateChecklist_Duplicate(t *testing.T) {
+	    client := testutil.SetupTestDB(t)
+	    defer client.Close()
+	
+	    svc := NewChecklistService(client)
+	    ctx := context.Background()
+	
+	    req := models.CreateChecklistRequest{Title: "Дубликат", InspectionType: "winter"}
+	
+	    _, err := svc.CreateChecklist(ctx, req)
+	    if err != nil {
+	        t.Fatalf("First CreateChecklist failed: %v", err)
+	    }
+	
+	    _, err = svc.CreateChecklist(ctx, req)
+	    if err != ErrChecklistConflict {
+	        t.Errorf("Expected ErrChecklistConflict, got %v", err)
+	    }
+	}
+	
+TestChecklistService_ListChecklists проверяет получение списка всех чеклистов. Тест создаёт несколько чеклистов и убеждается, что метод ListChecklists возвращает полный и корректный список. Это подтверждает, что сервис корректно агрегирует данные и возвращает их пользователю.
+	
+	func TestChecklistService_ListChecklists(t *testing.T) {
+	    client := testutil.SetupTestDB(t)
+	    defer client.Close()
+	
+	    svc := NewChecklistService(client)
+	    ctx := context.Background()
+	
+	    names := []string{"Чеклист 1", "Чеклист 2", "Чеклист 3"}
+	    for _, name := range names {
+	        _, err := svc.CreateChecklist(ctx, mod-els.CreateChecklistRequest{Title: name, InspectionType: "partial"})
+	        if err != nil {
+	            t.Fatalf("CreateChecklist failed: %v", err)
+	        }
+	    }
+	
+	    list, err := svc.ListChecklists(ctx)
+	    if err != nil {
+	        t.Fatalf("ListChecklists failed: %v", err)
+	    }
+	
+	    if len(list) != 3 {
+	        t.Errorf("Expected 3 checklists, got %d", len(list))
+	    }
+	}
+
+TestChecklistService_RetrieveChecklist_Success проверяет успешное получение конкретного чеклиста по ID. Тест убеждается, что сервис возвращает правильный объект с ожидаемым названием и типом проверки. Это подтверждает корректность поиска и извлечения данных по уникальному идентификатору.
+
+	func TestChecklistService_RetrieveChecklist_Success(t *testing.T) {
+	    client := testutil.SetupTestDB(t)
+	    defer client.Close()
+	
+	    svc := NewChecklistService(client)
+	    ctx := context.Background()
+	
+	    created, _ := svc.CreateChecklist(ctx, mod-els.CreateChecklistRequest{Title: "Тест", InspectionType: "spring"})
+	
+	    retrieved, err := svc.RetrieveChecklist(ctx, created.ID)
+	    if err != nil {
+	        t.Fatalf("RetrieveChecklist failed: %v", err)
+	    }
+	
+	    if retrieved.Title != "Тест" {
+	        t.Errorf("Expected title 'Тест', got %s", retrieved.Title)
+	    }
+	}
+
+TestChecklistService_RetrieveChecklist_NotFound проверяет поведение сервиса при запросе несуществующего чеклиста. В этом случае метод должен возвращать ошибку ErrChecklistNotFound. Тест подтверждает, что сервис корректно обрабатывает ситуацию отсутствия данных и возвращает ожидаемую ошибку.
+	
+	func TestChecklistService_RetrieveChecklist_NotFound(t *testing.T) {
+	    client := testutil.SetupTestDB(t)
+	    defer client.Close()
+	
+	    svc := NewChecklistService(client)
+	    ctx := context.Background()
+	
+	    _, err := svc.RetrieveChecklist(ctx, 99999)
+	    if err != ErrChecklistNotFound {
+	        t.Errorf("Expected ErrChecklistNotFound, got %v", err)
+	    }
+	}
+
 
 ### Интеграционные тесты
 
-Представить код тестов и его пояснение
+Тест setupDistrictTest настраивает тестовую среду для работы с районами: создаёт in-memory базу данных SQLite, инициализирует схему через Ent, создаёт сервис и маршруты Gin для всех CRUD‑операций.
+
+	func setupDistrictTest(t *testing.T) (*gin.Engine, *ent.Client) {
+	    t.Helper()
+	    gin.SetMode(gin.TestMode)
+	
+	    db, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys(1)")
+	    if err != nil {
+	        t.Fatalf("failed to open sqlite: %v", err)
+	    }
+	
+	    drv := entsql.OpenDB(dialect.SQLite, db)
+	    client := ent.NewClient(ent.Driver(drv))
+	
+	    ctx := context.Background()
+	    if err := client.Schema.Create(ctx); err != nil {
+	        t.Fatalf("failed to create schema: %v", err)
+	    }
+	
+	    t.Cleanup(func() {
+	        client.Close()
+	        db.Close()
+	    })
+	
+	    districtService := service.NewDistrictService(client)
+	    districtHandler := NewDistrictHandler(districtService)
+	
+	    r := gin.New()
+	    r.POST("/api/v1/districts", districtHandler.CreateDistrict)
+	    r.GET("/api/v1/districts", districtHandler.ListDistricts)
+	    r.GET("/api/v1/districts/:id", districtHandler.GetDistrict)
+	    r.PUT("/api/v1/districts/:id", districtHandler.UpdateDistrict)
+	    r.DELETE("/api/v1/districts/:id", districtHandler.DeleteDistrict)
+	
+	    return r, client
+	}
+
+TestDistrictHandler_CreateDistrict_Success проверяет успешное создание района через POST-запрос. Тест убеждается, что сервер возвращает статус 201 Created и что имя района в ответе совпадает с отправленным.
+
+	func TestDistrictHandler_CreateDistrict_Success(t *testing.T) {
+	    r, _ := setupDistrictTest(t)
+	
+	    reqBody := models.CreateDistrictRequest{Name: "Центральный район"}
+	    body, _ := json.Marshal(reqBody)
+	
+	    req := httptest.NewRequest(http.MethodPost, "/api/v1/districts", bytes.NewBuffer(body))
+	    req.Header.Set("Content-Type", "application/json")
+	    w := httptest.NewRecorder()
+	
+	    r.ServeHTTP(w, req)
+	
+	    if w.Code != http.StatusCreated {
+	        t.Errorf("Expected status 201, got %d. Body: %s", w.Code, w.Body.String())
+	    }
+	
+	    var resp models.DistrictResponse
+	    if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	        t.Fatalf("Failed to parse response: %v", err)
+	    }
+	
+	    if resp.Name != "Центральный район" {
+	        t.Errorf("Expected name 'Центральный район', got %s", resp.Name)
+	    }
+	}
+	
+TestDistrictHandler_CreateDistrict_InvalidJSON проверяет обработку некорректного JSON при создании района. Ожидается статус 400 Bad Request, что подтверждает корректную валидацию входных данных.
+	
+	func TestDistrictHandler_CreateDistrict_InvalidJSON(t *testing.T) {
+	    r, _ := setupDistrictTest(t)
+	
+	    req := httptest.NewRequest(http.MethodPost, "/api/v1/districts", bytes.NewBufferString("invalid"))
+	    req.Header.Set("Content-Type", "application/json")
+	    w := httptest.NewRecorder()
+	
+	    r.ServeHTTP(w, req)
+	
+	    if w.Code != http.StatusBadRequest {
+	        t.Errorf("Expected status 400, got %d", w.Code)
+	    }
+	}
+	
+TestDistrictHandler_ListDistricts проверяет получение списка всех районов через GET-запрос. Тест создаёт несколько районов напрямую в базе и убеждается, что API возвращает их корректно с ожидаемым количеством записей.
+
+	func TestDistrictHandler_ListDistricts(t *testing.T) {
+	    r, client := setupDistrictTest(t)
+	
+	    ctx := context.Background()
+	    client.District.Create().SetName("Район 1").SaveX(ctx)
+	    client.District.Create().SetName("Район 2").SaveX(ctx)
+	
+	    req := httptest.NewRequest(http.MethodGet, "/api/v1/districts", nil)
+	    w := httptest.NewRecorder()
+	
+	    r.ServeHTTP(w, req)
+	
+	    if w.Code != http.StatusOK {
+	        t.Errorf("Expected status 200, got %d", w.Code)
+	    }
+	
+	    var resp []models.DistrictResponse
+	    if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	        t.Fatalf("Failed to parse response: %v", err)
+	    }
+	
+	    if len(resp) != 2 {
+	        t.Errorf("Expected 2 districts, got %d", len(resp))
+	    }
+	}
+	
+TestDistrictHandler_GetDistrict_Success проверяет получение конкретного района по ID. Тест убеждается, что возвращается статус 200 OK и что имя района соответствует сохранённому значению в базе.
+
+	func TestDistrictHandler_GetDistrict_Success(t *testing.T) {
+	    r, client := setupDistrictTest(t)
+	
+	    ctx := context.Background()
+	    d := client.District.Create().SetName("Тестовый").SaveX(ctx)
+	
+	    req := httptest.NewRequest(http.MethodGet, "/api/v1/districts/1", nil)
+	    w := httptest.NewRecorder()
+	
+	    r.ServeHTTP(w, req)
+	
+	    if w.Code != http.StatusOK {
+	        t.Errorf("Expected status 200, got %d. Body: %s", w.Code, w.Body.String())
+	    }
+	
+	    var resp models.DistrictResponse
+	    if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	        t.Fatalf("Failed to parse response: %v", err)
+	    }
+	
+	    if resp.Name != d.Name {
+	        t.Errorf("Expected name %s, got %s", d.Name, resp.Name)
+	    }
+	}
 
 ---
 
