@@ -8,7 +8,7 @@
 
 **Ссылка на репозиторий сервера** [[https://github.com/Sofa-01/Housing-and-communal-services-Server](https://github.com/Sofa-01/jkh-server.git)]
 
-**Ссылка на репозиторий клиента** https://github.com/Sofa-01/Housing-and-communal-services-Client
+**Ссылка на репозиторий клиента** [https://github.com/Sofa-01/Housing-and-communal-services-Client](https://github.com/Sofa-01/jkh-client.git)]
 
 ---
 
